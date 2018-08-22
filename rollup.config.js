@@ -1,16 +1,22 @@
 // rollup.config.js
 import babel from 'rollup-plugin-babel'
+import typescript from 'rollup-plugin-typescript'
 
 export default {
-  input: 'lib/index.js',
+  input: 'lib/index.ts',
+  format: 'umd',
+  moduleName: 'imgViewer',
   output: {
-    file: 'index.js',
-    format: 'umd',
-    name: 'imgViewer'
+    file: 'index.js'
   },
   plugins: [
+    typescript({
+      typescript: require('typescript')
+    }),
     babel({
-      exclude: 'node_modules/**' // only transpile our source code
+      exclude: 'node_modules/**', // only transpile our source code
+      externalHelpers: false,
+      runtimeHelpers: true
     })
   ]
 }
