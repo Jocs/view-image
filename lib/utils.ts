@@ -11,9 +11,7 @@ export const easeOutQuart = (t, b, c, d) => {
   return -c * (t * t * t * t - 1) + b
 }
 
-// function to check if image is loaded
-export const imageLoaded = (img) => {
-  return img.complete && (typeof img.naturalWidth === 'undefined' || img.naturalWidth !== 0)
-}
-
 export const noop = () => {}
+
+let id = 0
+export const getUniqueId = ():number => id++

@@ -1,63 +1,75 @@
-import { noop } from './utils'
+import { noop, getUniqueId } from './utils'
 
 class Slider {
-  constructor (container, options) {
+  private container: HTMLElement
+  private onStart: any
+  private onMove: any
+  private onEnd: any
+  private eventCenter: any
+  private sliderId: string
+
+  constructor(container, options) {
     this.container = container
+    this.eventCenter = options.eventCenter
     this.onStart = options.onStart || noop
     this.onMove = options.onMove || noop
     this.onEnd = options.onEnd || noop
-    this.sliderId = options.sliderId || 'slider' + Math.ceil(Math.random() * 1000000)
+    this.sliderId = options.sliderId || 'slider-' + getUniqueId()
   }
 
-  init () {
-    const { container } = this
+  public init() {
+    const { container, eventCenter } = this
 
-  //assign event on snap image wrap
-    const touchMouse = function (eOrginal) {
-    eOrginal.preventDefault();
-
-    var touchMove = eOrginal.type == 'touchstart' ? 'touchmove' : 'mousemove',
-      touchEnd = eOrginal.type == 'touchstart' ? 'touchend' : 'mouseup',
-      eOrginal = eOrginal,
-      sx = eOrginal.clientX || eOrginal.touches[0].clientX,
-      sy = eOrginal.clientY || eOrginal.touches[0].clientY;
-
-    var start = self.onStart(eOrginal, {
-      x: sx,
-      y: sy
-    });
-
-    if (start === false) return
-
-    var moveListener = function (eOrginal) {
+    // assign event on snap image wrap
+    const touchMouse = eOrginal => {
       eOrginal.preventDefault()
 
-      //get the cordinates
-      var mx = eOrginal.clientX || eOrginal.touches[0].clientX,
-        my = eOrginal.clientY || eOrginal.touches[0].clientY;
+      let moveId
+      let endId
 
-      self.onMove(eOrginal, {
-        dx: mx - sx,
-        dy: my - sy,
-        mx: mx,
-        my: my
-      });
-    };
+      const touchMove = eOrginal.type === 'touchstart' ? 'touchmove' : 'mousemove'
+      const touchEnd = eOrginal.type === 'touchstart' ? 'touchend' : 'mouseup'
+      const sx = eOrginal.clientX || eOrginal.touches[0].clientX
+      const sy = eOrginal.clientY || eOrginal.touches[0].clientY
 
-    var endListener = function () {
-      document.removeEventListener(touchMove, moveListener)
-      document.removeEventListener(touchEnd, endListener)
-      self.onEnd()
+      const start = this.onStart(eOrginal, {
+        x: sx,
+        y: sy
+      })
+
+      if (start === false) {
+        return
+      }
+
+      const moveListener = emove => {
+        emove.preventDefault()
+
+        // get the cordinates
+        const mx = emove.clientX || emove.touches[0].clientX
+        const my = emove.clientY || emove.touches[0].clientY
+
+        this.onMove(emove, {
+          dx: mx - sx,
+          dy: my - sy,
+          mx,
+          my
+        })
+      }
+
+      const endListener = () => {
+        eventCenter.detachDOMEvent(moveId)
+        eventCenter.detachDOMEvent(endId)
+        this.onEnd()
+      }
+      moveId = eventCenter.attachDOMEvent(document, touchMove, moveListener)
+      endId = eventCenter.attachDOMEvent(document, touchEnd, endListener)
     }
 
-    document.addEventListener(touchMove, moveListener);
-    document.addEventListener(touchEnd, endListener);
-  }
-  ['touchstart', 'mousedown'].forEach(function (evt) {
-    container.addEventListener(evt, touchMouse)
-  })
+    ;['touchstart', 'mousedown'].forEach(evt => {
+      eventCenter.attachDOMEvent(container, evt, touchMouse)
+    })
 
-  return this
+    return this
   }
 }
 

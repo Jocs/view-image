@@ -4,10 +4,10 @@ import typescript from 'rollup-plugin-typescript'
 
 export default {
   input: 'lib/index.ts',
-  format: 'umd',
-  moduleName: 'imgViewer',
   output: {
-    file: 'index.js'
+    file: 'index.js',
+    format: 'umd',
+    name: 'imgViewer'
   },
   plugins: [
     typescript({
