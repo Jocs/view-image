@@ -1,6 +1,6 @@
 <p align="center"><img src="https://github.com/Jocs/img-viewer/blob/master/logo.png?raw=true" alt="mark text" width="100" height="100"></p>
 
-<h1 align="center">IMG VIEWER</h1>
+<h1 align="center">VIEW IMAGE</h1>
 
 <div align="center">
   <strong>A <code>tool</code> to help you better preview your images</strong>
@@ -43,7 +43,7 @@
 ## Download
 
 ```sh
-npm install -D img-viewer
+npm install -D view-image
 ```
 
 ## Guide
@@ -54,28 +54,28 @@ npm install -D img-viewer
 <div id="custom-id"></div>
 ```
 
-在 javascript 文件中引入 `img-viewer`。
+在 javascript 文件中引入 `view-image`。
 
 ```javascript
-import ImgViewer from 'img-viewer'
+import ViewImage from 'view-image'
 
 // or add css in the html file
-import 'img-viewer/lib/imgViewer.css'
+import 'view-image/lib/imgViewer.css'
 
 const container = document.querySelector('#custom-id')
-const imageViewer = new ImgViewer(container, {
+const imageViewer = new ViewImage(container, {
   url: 'the/path/to/your/image/url.png'
 })
 ```
 
 ## Documents
 
-#### class：ImgViewer
+#### class：ViewImage
 
 构造函数，用于生成图片预览实例。用法如下：
 
 ```javascript
-const imageViewer = new ImgViewer(container, options)
+const imageViewer = new ViewImage(container, options)
 ```
 
 * container: **HTMLDivElement** 类型，用于设置图片预览的容器元素。
@@ -149,7 +149,7 @@ imageViewer.resetZoom()
 
 ```javascript
 import React from 'react'
-import ImgViewer from 'img-viewer'
+import ImgViewer from 'view-image'
 
 class ImageViewer extends React.Component {
   componentDidMount() {
