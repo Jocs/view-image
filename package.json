@@ -1,5 +1,5 @@
 {
-  "name": "img-viewer",
+  "name": "view-image",
   "version": "0.0.1",
   "description": "image viewer",
   "main": "index.js",

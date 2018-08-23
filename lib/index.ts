@@ -85,7 +85,7 @@ class ImageViewer {
     this.init()
   }
 
-  public async init() {
+  private async init() {
     const { beforeload, loaded, failed } = this.options
 
     beforeload()
@@ -589,8 +589,7 @@ class ImageViewer {
       image,
       container,
       snapView,
-      imageNativeWidth,
-      imageNativeHeight
+      imageNativeWidth
     } = this
     const imageStyles = getComputedStyle(image)
     const containerStyles = getComputedStyle(container)

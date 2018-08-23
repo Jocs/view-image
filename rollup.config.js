@@ -7,7 +7,7 @@ export default {
   output: {
     file: 'index.js',
     format: 'umd',
-    name: 'imgViewer'
+    name: 'ImgViewer'
   },
   plugins: [
     typescript({
