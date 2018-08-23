@@ -27,14 +27,15 @@ class Slider {
       let moveId
       let endId
 
-      const touchMove = eOrginal.type === 'touchstart' ? 'touchmove' : 'mousemove'
+      const touchMove =
+        eOrginal.type === 'touchstart' ? 'touchmove' : 'mousemove'
       const touchEnd = eOrginal.type === 'touchstart' ? 'touchend' : 'mouseup'
-      const sx = eOrginal.clientX || eOrginal.touches[0].clientX
-      const sy = eOrginal.clientY || eOrginal.touches[0].clientY
+      const x = eOrginal.clientX || eOrginal.touches[0].clientX
+      const y = eOrginal.clientY || eOrginal.touches[0].clientY
 
       const start = this.onStart(eOrginal, {
-        x: sx,
-        y: sy
+        x,
+        y
       })
 
       if (start === false) {
@@ -49,8 +50,8 @@ class Slider {
         const my = emove.clientY || emove.touches[0].clientY
 
         this.onMove(emove, {
-          dx: mx - sx,
-          dy: my - sy,
+          dx: mx - x,
+          dy: my - y,
           mx,
           my
         })
@@ -64,7 +65,6 @@ class Slider {
       moveId = eventCenter.attachDOMEvent(document, touchMove, moveListener)
       endId = eventCenter.attachDOMEvent(document, touchEnd, endListener)
     }
-
     ;['touchstart', 'mousedown'].forEach(evt => {
       eventCenter.attachDOMEvent(container, evt, touchMouse)
     })

@@ -1,5 +1,11 @@
 import EventCenter from './event'
-import { imageViewHtml, defaultOptions, ZOOM_CONSTANT, MOUSE_WHEEL_COUNT } from './config'
+import {
+  imageViewHtml,
+  defaultOptions,
+  ZOOM_CONSTANT,
+  MOUSE_WHEEL_COUNT,
+  ZOOM_DELTA
+} from './config'
 import { getUniqueId, easeOutQuart } from './utils'
 import Slider from './slider'
 
@@ -8,8 +14,18 @@ interface IOptions {
   zoomValue?: number
   snapView?: boolean
   maxZoom?: number
+  minZoom?: number
   refreshOnResize?: boolean
   zoomOnMouseWheel?: boolean
+  beforeload?: () => any
+  loaded?: (img) => any
+  failed?: (err) => any
+}
+
+interface IKeyWords {
+  original: number
+  cover: number
+  contain: number
 }
 
 interface IDim {
@@ -41,8 +57,11 @@ class ImageViewer {
   private zoomSlider: any
   private zooming: boolean
   private zoomFrame: any
+  private zoomKeyWords: IKeyWords
+  private imageNativeWidth: number
+  private imageNativeHeight: number
 
-  constructor (container, options: IOptions) {
+  constructor(container, options: IOptions) {
     this.container = container
     this.options = { ...defaultOptions, ...options }
     this.container.innerHTML = imageViewHtml
@@ -54,10 +73,11 @@ class ImageViewer {
     this.zoomHandleWrap = container.querySelector('.iv-zoom-slider')
     this.viewerId = 'iv-' + getUniqueId()
     this.imgUrl = options.url
-    this.zoomValue = this.options.zoomValue
+    this.zoomValue = 100
     this.zooming = false
     this.eventCenter = new EventCenter()
     container.classList.add('iv-container')
+    this.snapViewVisibility(false)
     if (getComputedStyle(container)['position'] === 'static') {
       container.style.position = 'relative'
     }
@@ -65,8 +85,18 @@ class ImageViewer {
     this.init()
   }
 
-  public async init () {
-    await this.load(this.imgUrl)
+  public async init() {
+    const { beforeload, loaded, failed } = this.options
+
+    beforeload()
+    try {
+      const image = await this.load(this.imgUrl)
+      this.snapViewVisibility(true)
+      loaded(image)
+    } catch (err) {
+      this.container.innerHTML = ''
+      return failed(err)
+    }
     this.calculateDimensions()
     this.initSnapSlider()
     this.initImageSlider()
@@ -80,13 +110,14 @@ class ImageViewer {
     }
     this.preventDefaultTouch()
     this.zoomHandler()
+    this.resetZoom()
   }
 
-  private initSnapSlider () {
-    const { snapImage, snapHandle, snapImageWrap, viewerId, eventCenter } = this
+  private initSnapSlider() {
+    const { snapHandle, snapImageWrap, viewerId, eventCenter } = this
     const viewer = this
 
-    this.snapSlider = new Slider(snapImage, {
+    this.snapSlider = new Slider(snapImageWrap, {
       sliderId: viewerId,
       eventCenter,
       onStart() {
@@ -95,13 +126,13 @@ class ImageViewer {
         }
         const { imageSlider } = viewer
         const handleStyle = snapHandle.style
-
+        const snapImageWrapStyles = getComputedStyle(snapImageWrap)
         this.curHandleTop = parseFloat(handleStyle.top)
         this.curHandleLeft = parseFloat(handleStyle.left)
         this.handleWidth = parseFloat(handleStyle.width)
         this.handleHeight = parseFloat(handleStyle.height)
-        this.width = parseInt(getComputedStyle(snapImageWrap)['width'], 10)
-        this.height = parseInt(getComputedStyle(snapImageWrap)['height'], 10)
+        this.width = parseInt(snapImageWrapStyles['width'], 10)
+        this.height = parseInt(snapImageWrapStyles['height'], 10)
 
         // stop momentum on image
         if (imageSlider) {
@@ -110,9 +141,9 @@ class ImageViewer {
         }
       },
 
-      onMove (e, position) {
-        let xPerc = this.curHandleLeft + position.dx * 100 / this.width
-        let yPerc = this.curHandleTop + position.dy * 100 / this.height
+      onMove(e, position) {
+        let xPerc = this.curHandleLeft + (position.dx * 100) / this.width
+        let yPerc = this.curHandleTop + (position.dy * 100) / this.height
 
         xPerc = Math.max(0, xPerc)
         xPerc = Math.min(100 - this.handleWidth, xPerc)
@@ -123,8 +154,14 @@ class ImageViewer {
         const containerDim = viewer.containerDim
         const imgWidth = viewer.imageDim.w * (viewer.zoomValue / 100)
         const imgHeight = viewer.imageDim.h * (viewer.zoomValue / 100)
-        const imgLeft = imgWidth < containerDim.w ? (containerDim.w - imgWidth) / 2 : -imgWidth * xPerc / 100
-        const imgTop = imgHeight < containerDim.h ? (containerDim.h - imgHeight) / 2 : -imgHeight * yPerc / 100
+        const imgLeft =
+          imgWidth < containerDim.w
+            ? (containerDim.w - imgWidth) / 2
+            : (-imgWidth * xPerc) / 100
+        const imgTop =
+          imgHeight < containerDim.h
+            ? (containerDim.h - imgHeight) / 2
+            : (-imgHeight * yPerc) / 100
 
         snapHandle.style.top = yPerc + '%'
         snapHandle.style.left = xPerc + '%'
@@ -135,7 +172,7 @@ class ImageViewer {
     }).init()
   }
 
-  private initImageSlider () {
+  private initImageSlider() {
     const { imageWrap, viewerId, eventCenter } = this
     const viewer = this
     this.imageSlider = new Slider(imageWrap, {
@@ -149,8 +186,8 @@ class ImageViewer {
           return
         }
         viewer.snapSlider.onStart()
-        this.imgWidth = viewer.imageDim.w * viewer.zoomValue / 100
-        this.imgHeight = viewer.imageDim.h * viewer.zoomValue / 100
+        this.imgWidth = (viewer.imageDim.w * viewer.zoomValue) / 100
+        this.imgHeight = (viewer.imageDim.h * viewer.zoomValue) / 100
         this.positions = [position, position]
         this.startPosition = position
 
@@ -175,8 +212,8 @@ class ImageViewer {
         this.currentPos = position
 
         viewer.snapSlider.onMove(e, {
-          dx: -position.dx * viewer.snapSlider.width / this.imgWidth,
-          dy: -position.dy * viewer.snapSlider.height / this.imgHeight
+          dx: (-position.dx * viewer.snapSlider.width) / this.imgWidth,
+          dy: (-position.dy * viewer.snapSlider.height) / this.imgHeight
         })
       },
       onEnd() {
@@ -192,15 +229,17 @@ class ImageViewer {
 
         const momentum = () => {
           if (step <= 60) {
-            viewer.imageSlider.sliderMomentumFrame = requestAnimationFrame(momentum)
+            viewer.imageSlider.sliderMomentumFrame = requestAnimationFrame(
+              momentum
+            )
           }
 
           positionX = positionX + easeOutQuart(step, xDiff / 3, -xDiff / 3, 60)
           positionY = positionY + easeOutQuart(step, yDiff / 3, -yDiff / 3, 60)
 
           viewer.snapSlider.onMove(null, {
-            dx: -(positionX * viewer.snapSlider.width / this.imgWidth),
-            dy: -(positionY * viewer.snapSlider.height / this.imgHeight)
+            dx: -((positionX * viewer.snapSlider.width) / this.imgWidth),
+            dy: -((positionY * viewer.snapSlider.height) / this.imgHeight)
           })
           step++
         }
@@ -216,12 +255,11 @@ class ImageViewer {
     }).init()
   }
 
-  private initZoomOnMouseWheel () {
+  private initZoomOnMouseWheel() {
     const { imageWrap, container, eventCenter } = this
     /*Add zoom interation in mouse wheel*/
     let changedDelta = 0
     const handler = e => {
-
       if (!this.loaded) {
         return
       }
@@ -231,9 +269,13 @@ class ImageViewer {
 
       // cross-browser wheel delta
       const delta = Math.max(-1, Math.min(1, e.wheelDelta || -e.detail))
-      const zoomValue = this.zoomValue * (100 + delta * ZOOM_CONSTANT) / 100
+      const zoomValue = (this.zoomValue * (100 + delta * ZOOM_CONSTANT)) / 100
 
-      if (!(zoomValue >= 100 && zoomValue <= this.options.maxZoom)) {
+      if (
+        !(
+          zoomValue >= this.options.minZoom && zoomValue <= this.options.maxZoom
+        )
+      ) {
         changedDelta += Math.abs(delta)
       } else {
         changedDelta = 0
@@ -246,8 +288,10 @@ class ImageViewer {
       e.preventDefault()
 
       const contOffset = container.getBoundingClientRect()
-      const x = (e.pageX || e.pageX) - (contOffset.left + document.body.scrollLeft)
-      const y = (e.pageY || e.pageY) - (contOffset.top + document.body.scrollTop)
+      const x =
+        (e.pageX || e.pageX) - (contOffset.left + document.body.scrollLeft)
+      const y =
+        (e.pageY || e.pageY) - (contOffset.top + document.body.scrollTop)
 
       this.zoom(zoomValue, {
         x,
@@ -262,12 +306,12 @@ class ImageViewer {
     })
   }
 
-  private pinch () {
+  private pinch() {
     const { container, imageWrap, eventCenter } = this
     // apply pinch and zoom feature
     let moveId
     let endId
-    const handler = (estart) => {
+    const handler = estart => {
       if (!this.loaded) {
         return
       }
@@ -283,19 +327,29 @@ class ImageViewer {
 
       const contOffset = container.getBoundingClientRect()
 
-      const startdist = Math.sqrt(Math.pow(touch1.pageX - touch0.pageX, 2) + Math.pow(touch1.pageY - touch0.pageY, 2))
+      const startdist = Math.sqrt(
+        Math.pow(touch1.pageX - touch0.pageX, 2) +
+          Math.pow(touch1.pageY - touch0.pageY, 2)
+      )
       const startZoom = this.zoomValue
       const center = {
-        x: (touch1.pageX + touch0.pageX) / 2 - (contOffset.left + document.body.scrollLeft),
-        y: (touch1.pageY + touch0.pageY) / 2 - (contOffset.top + document.body.scrollTop)
+        x:
+          (touch1.pageX + touch0.pageX) / 2 -
+          (contOffset.left + document.body.scrollLeft),
+        y:
+          (touch1.pageY + touch0.pageY) / 2 -
+          (contOffset.top + document.body.scrollTop)
       }
 
-      const moveListener = (emove) => {
+      const moveListener = emove => {
         emove.preventDefault()
 
         const touchM0 = emove.touches[0]
         const touchM1 = emove.touches[1]
-        const newDist = Math.sqrt(Math.pow(touchM1.pageX - touchM0.pageX, 2) + Math.pow(touchM1.pageY - touchM0.pageY, 2))
+        const newDist = Math.sqrt(
+          Math.pow(touchM1.pageX - touchM0.pageX, 2) +
+            Math.pow(touchM1.pageY - touchM0.pageY, 2)
+        )
         const zoomValue = startZoom + (newDist - startdist) / 2
 
         this.zoom(zoomValue, center)
@@ -312,7 +366,7 @@ class ImageViewer {
     eventCenter.attachDOMEvent(imageWrap, 'touchstart', handler)
   }
 
-  private doubleClick () {
+  private doubleClick() {
     const { imageWrap, eventCenter } = this
     // handle double tap for zoom in and zoom out
     let touchtime = 0
@@ -325,22 +379,24 @@ class ImageViewer {
           y: e.pageY
         }
       } else {
-        if (Date.now() - touchtime < 500 && Math.abs(e.pageX - point.x) < 50 && Math.abs(e.pageY - point.y) < 50) {
+        if (
+          Date.now() - touchtime < 500 &&
+          Math.abs(e.pageX - point.x) < 50 &&
+          Math.abs(e.pageY - point.y) < 50
+        ) {
           if (this.zoomValue === this.options.zoomValue) {
             this.zoom(200)
           } else {
             this.resetZoom()
           }
-          touchtime = 0
-        } else {
-          touchtime = 0
         }
+        touchtime = 0
       }
     }
     eventCenter.attachDOMEvent(imageWrap, 'click', handler)
   }
 
-  private resizeHandler () {
+  private resizeHandler() {
     const { eventCenter } = this
     const handler = () => {
       this.calculateDimensions()
@@ -349,7 +405,7 @@ class ImageViewer {
     eventCenter.attachDOMEvent(window, 'resize', handler)
   }
 
-  private preventDefaultTouch () {
+  private preventDefaultTouch() {
     const { eventCenter, container } = this
     // prevent scrolling the backside if container if fixed positioned
     const handler = e => {
@@ -361,58 +417,71 @@ class ImageViewer {
   }
 
   // zoom in zoom out using zoom handle
-  private zoomHandler () {
+  private zoomHandler() {
     const { zoomHandleWrap, viewerId, eventCenter } = this
     const viewer = this
     this.zoomSlider = new Slider(zoomHandleWrap, {
       sliderId: viewerId,
       eventCenter,
-      onStart (eStart) {
+      onStart(eStart) {
         if (!viewer.loaded) {
           return false
         }
 
-        this.leftOffset = zoomHandleWrap.getBoundingClientRect().left + document.body.scrollLeft
-        this.handleWidth = parseInt(getComputedStyle(viewer.zoomHandle)['width'], 10)
+        this.leftOffset =
+          zoomHandleWrap.getBoundingClientRect().left + document.body.scrollLeft
+        this.handleWidth = parseInt(
+          getComputedStyle(viewer.zoomHandle)['width'],
+          10
+        )
         this.onMove(eStart)
       },
-      onMove (e, position) {
-        let newLeft = (e.pageX || e.touches[0].pageX) - this.leftOffset - this.handleWidth / 2
+      onMove(e, position) {
+        let newLeft =
+          (e.pageX || e.touches[0].pageX) -
+          this.leftOffset -
+          this.handleWidth / 2
 
         newLeft = Math.max(0, newLeft)
         newLeft = Math.min(viewer.zoomSliderLength, newLeft)
 
-        const zoomValue = 100 + (viewer.options.maxZoom - 100) * newLeft / viewer.zoomSliderLength
+        const zoomValue =
+          100 +
+          ((viewer.options.maxZoom - 100) * newLeft) / viewer.zoomSliderLength
 
         viewer.zoom(zoomValue)
       }
     }).init()
   }
 
-  private clearFrames () {
+  private clearFrames() {
     clearInterval(this.imageSlider.slideMomentumCheck)
     cancelAnimationFrame(this.imageSlider.sliderMomentumFrame)
     cancelAnimationFrame(this.zoomFrame)
   }
 
-  private resetZoom () {
+  public resetZoom() {
     this.zoom(this.options.zoomValue)
   }
 
-  public zoom (perc, point?) {
+  public zoom(value: number | string, point?) {
+    let perc = typeof value === 'string' ? this.zoomKeyWords[value] : value
+
     const { image, containerDim, imageDim, zoomValue } = this
-    const maxZoom = this.options.maxZoom
-    const curLeft = parseFloat(getComputedStyle(image)['left'])
-    const curTop = parseFloat(getComputedStyle(image)['top'])
-    let step = 0
-
-    perc = Math.round(Math.max(100, perc))
-    perc = Math.min(this.options.maxZoom, perc)
-
-    point = point || {
+    const { minZoom, maxZoom } = this.options
+    const imageStyles = getComputedStyle(image)
+    const curLeft = parseFloat(imageStyles['left'])
+    const curTop = parseFloat(imageStyles['top'])
+    const center = {
       x: containerDim.w / 2,
       y: containerDim.h / 2
     }
+    let step = 0
+
+    perc = Math.round(Math.max(minZoom, perc))
+    perc = Math.round(Math.min(maxZoom, perc))
+
+    point = perc >= 100 && point ? point : center
 
     this.clearFrames()
 
@@ -430,24 +499,25 @@ class ImageViewer {
       }
 
       const tickZoom = easeOutQuart(step, zoomValue, perc - zoomValue, 20)
-
       const ratio = tickZoom / zoomValue
-      const imgWidth = imageDim.w * tickZoom / 100
-      const imgHeight = imageDim.h * tickZoom / 100
+      const imgWidth = (imageDim.w * tickZoom) / 100
+      const imgHeight = (imageDim.h * tickZoom) / 100
       let newLeft = -((point.x - curLeft) * ratio - point.x)
       let newTop = -((point.y - curTop) * ratio - point.y)
 
-      // fix for left and top
-      newLeft = Math.min(newLeft, baseLeft)
-      newTop = Math.min(newTop, baseTop)
+      if (perc >= 100) {
+        // fix for left and top
+        newLeft = Math.min(newLeft, baseLeft)
+        newTop = Math.min(newTop, baseTop)
 
-      // fix for right and bottom
-      if (newLeft + imgWidth < baseRight) {
-        newLeft = baseRight - imgWidth // newLeft - (newLeft + imgWidth - baseRight)
-      }
+        // fix for right and bottom
+        if (newLeft + imgWidth < baseRight) {
+          newLeft = baseRight - imgWidth // newLeft - (newLeft + imgWidth - baseRight)
+        }
 
-      if (newTop + imgHeight < baseBottom) {
-        newTop = baseBottom - imgHeight // newTop + (newTop + imgHeight - baseBottom)
+        if (newTop + imgHeight < baseBottom) {
+          newTop = baseBottom - imgHeight // newTop + (newTop + imgHeight - baseBottom)
+        }
       }
 
       image.style.height = imgHeight + 'px'
@@ -455,23 +525,58 @@ class ImageViewer {
       image.style.left = newLeft + 'px'
       image.style.top = newTop + 'px'
       this.zoomValue = tickZoom
-      this.resizeHandle(imgWidth, imgHeight, newLeft, newTop)
+      if (perc < 100) {
+        this.snapViewVisibility(false)
+      } else {
+        this.snapViewVisibility(true)
+        this.resizeHandle(imgWidth, imgHeight, newLeft, newTop)
 
-      // update zoom handle position
-      this.zoomHandle.style.left = (tickZoom - 100) * this.zoomSliderLength / (maxZoom - 100) + 'px'
+        // update zoom handle position
+        this.zoomHandle.style.left =
+          ((tickZoom - 100) * this.zoomSliderLength) / (maxZoom - 100) + 'px'
+      }
     }
 
     zoom()
   }
 
-  private resizeHandle (imgWidth, imgHeight, imgLeft, imgTop) {
+  public zoomIn() {
+    const { zoomValue } = this
+    const { maxZoom } = this.options
+    const newZoom = Math.min(zoomValue * ZOOM_DELTA, maxZoom)
+    this.zoom(newZoom)
+  }
+
+  public zoomOut() {
+    const { zoomValue } = this
+    const { minZoom } = this.options
+    const newZoom = Math.max(zoomValue / ZOOM_DELTA, minZoom)
+    this.zoom(newZoom)
+  }
+
+  private snapViewVisibility(status: boolean): void {
+    const { snapView } = this
+    snapView.style.visibility = status ? 'visible' : 'hidden'
+  }
+
+  private resizeHandle(imgWidth, imgHeight, imgLeft, imgTop) {
     const { snapHandle, image } = this
-    const imageWidth = imgWidth || this.imageDim.w * this.zoomValue / 100
-    const imageHeight = imgHeight || this.imageDim.h * this.zoomValue / 100
-    const left = Math.max(-(imgLeft || parseFloat(getComputedStyle(image)['left'])) * 100 / imageWidth, 0)
-    const top = Math.max(-(imgTop || parseFloat(getComputedStyle(image)['top'])) * 100 / imageHeight, 0)
-    const handleWidth = Math.min(this.containerDim.w * 100 / imageWidth, 100)
-    const handleHeight = Math.min(this.containerDim.h * 100 / imageHeight, 100)
+    const imageWidth = imgWidth || (this.imageDim.w * this.zoomValue) / 100
+    const imageHeight = imgHeight || (this.imageDim.h * this.zoomValue) / 100
+    const imageStyles = getComputedStyle(image)
+    const left = Math.max(
+      (-(imgLeft || parseFloat(imageStyles['left'])) * 100) / imageWidth,
+      0
+    )
+    const top = Math.max(
+      (-(imgTop || parseFloat(imageStyles['top'])) * 100) / imageHeight,
+      0
+    )
+    const handleWidth = Math.min((this.containerDim.w * 100) / imageWidth, 100)
+    const handleHeight = Math.min(
+      (this.containerDim.h * 100) / imageHeight,
+      100
+    )
 
     snapHandle.style.top = top + '%'
     snapHandle.style.left = left + '%'
@@ -479,12 +584,20 @@ class ImageViewer {
     snapHandle.style.height = handleHeight + '%'
   }
 
-  private calculateDimensions () {
-    const { image, container, snapView } = this
-    const imageWidth = parseInt(getComputedStyle(image)['width'], 10)
-    const imageHeight = parseInt(getComputedStyle(image)['height'], 10)
-    const contWidth = parseInt(getComputedStyle(container)['width'], 10)
-    const contHeight = parseInt(getComputedStyle(container)['height'], 10)
+  private calculateDimensions() {
+    const {
+      image,
+      container,
+      snapView,
+      imageNativeWidth,
+      imageNativeHeight
+    } = this
+    const imageStyles = getComputedStyle(image)
+    const containerStyles = getComputedStyle(container)
+    const imageWidth = parseInt(imageStyles['width'], 10)
+    const imageHeight = parseInt(imageStyles['height'], 10)
+    const contWidth = parseInt(containerStyles['width'], 10)
+    const contHeight = parseInt(containerStyles['height'], 10)
     const snapViewWidth = snapView.clientWidth
     const snapViewHeight = snapView.clientHeight
 
@@ -497,9 +610,11 @@ class ImageViewer {
     let imgHeight
     const ratio = imageWidth / imageHeight
 
-    imgWidth = (imageWidth > imageHeight && contHeight >= contWidth) || ratio * contHeight > contWidth
-      ? contWidth
-      : ratio * contHeight
+    imgWidth =
+      (imageWidth > imageHeight && contHeight >= contWidth) ||
+      ratio * contHeight > contWidth
+        ? contWidth
+        : ratio * contHeight
 
     imgHeight = imgWidth / ratio
 
@@ -517,16 +632,32 @@ class ImageViewer {
     image.style.maxHeight = 'none'
 
     // set the snap Image dimension
-    const snapWidth = imgWidth > imgHeight ? snapViewWidth : imgWidth * snapViewHeight / imgHeight
-    const snapHeight = imgHeight > imgWidth ? snapViewHeight : imgHeight * snapViewWidth / imgWidth
+    const snapWidth =
+      imgWidth > imgHeight
+        ? snapViewWidth
+        : (imgWidth * snapViewHeight) / imgHeight
+    const snapHeight =
+      imgHeight > imgWidth
+        ? snapViewHeight
+        : (imgHeight * snapViewWidth) / imgWidth
 
     this.snapImage.style.width = snapWidth + 'px'
     this.snapImage.style.height = snapHeight + 'px'
 
     this.zoomSliderLength = snapViewWidth - this.zoomHandle.offsetWidth
+
+    const original = (imageNativeWidth * 100) / imgWidth
+    const cover = (contWidth * 100) / imgWidth
+    const contain = 100
+
+    this.zoomKeyWords = {
+      original,
+      cover,
+      contain
+    }
   }
 
-  public load (imgUrl) {
+  public load(imgUrl) {
     const { snapImageWrap, imageWrap } = this
     let resolve = null
     let reject = null
@@ -534,21 +665,24 @@ class ImageViewer {
       resolve = re
       reject = rj
     })
-
     const image = new Image()
     image.src = imgUrl
 
     image.onload = () => {
-      snapImageWrap.insertAdjacentHTML('afterbegin', `<img src=${imgUrl} class="iv-snap-image">`)
+      snapImageWrap.insertAdjacentHTML(
+        'afterbegin',
+        `<img src=${imgUrl} class="iv-snap-image">`
+      )
       imageWrap.innerHTML = `<img src=${imgUrl} class="iv-large-image">`
-
+      this.imageNativeWidth = image.width
+      this.imageNativeHeight = image.height
       this.snapImage = snapImageWrap.querySelector('img.iv-snap-image')
       this.image = imageWrap.querySelector('img.iv-large-image')
 
       this.snapImage.style.display = 'inline'
       this.image.style.display = 'block'
       this.loaded = true
-      resolve()
+      resolve(image)
     }
     image.onerror = () => {
       reject()
@@ -559,7 +693,6 @@ class ImageViewer {
   public destroy() {
     this.eventCenter.detachAllDomEvents()
   }
-
 }
 
 export default ImageViewer

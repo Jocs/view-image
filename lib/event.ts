@@ -6,7 +6,7 @@ class EventCenter {
    * [attachDOMEvent] bind event listener to target, and return a unique ID,
    * this ID
    */
-  public attachDOMEvent (target, event, listener, capture) {
+  public attachDOMEvent(target, event, listener, capture) {
     if (this.checkHasBind(target, event, listener, capture)) {
       return false
     }
@@ -25,7 +25,7 @@ class EventCenter {
    * [detachDOMEvent removeEventListener]
    * @param  {[type]} eventId [unique eventId]
    */
-  public detachDOMEvent (eventId) {
+  public detachDOMEvent(eventId) {
     if (!eventId) {
       return false
     }
@@ -38,14 +38,19 @@ class EventCenter {
   /**
    * [detachAllDomEvents remove all the DOM events handler]
    */
-  public detachAllDomEvents () {
+  public detachAllDomEvents() {
     this.events.forEach(event => this.detachDOMEvent(event.eventId))
   }
 
   // Determine whether the event has been bind
-  public checkHasBind (cTarget, cEvent, cListener, cCapture) {
+  public checkHasBind(cTarget, cEvent, cListener, cCapture) {
     for (const { target, event, listener, capture } of this.events) {
-      if (target === cTarget && event === cEvent && listener === cListener && capture === cCapture) {
+      if (
+        target === cTarget &&
+        event === cEvent &&
+        listener === cListener &&
+        capture === cCapture
+      ) {
         return true
       }
     }

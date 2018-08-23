@@ -1,3 +1,5 @@
+import { noop } from './utils'
+
 export const imageViewHtml = `
 <div class="iv-snap-view">
   <div class="iv-snap-image-wrap">
@@ -15,11 +17,16 @@ export const imageViewHtml = `
 export const defaultOptions = {
   zoomValue: 100,
   snapView: true,
-  maxZoom: 500,
+  maxZoom: 1000,
+  minZoom: 50,
   refreshOnResize: true,
-  zoomOnMouseWheel: true 
+  zoomOnMouseWheel: true,
+  beforeload: noop,
+  loaded: noop,
+  failed: noop
 }
 
-  // constants
+// constants
 export const ZOOM_CONSTANT = 15 // increase or decrease value for zoom on mouse wheel
 export const MOUSE_WHEEL_COUNT = 5 // A mouse delta after which it should stop preventing default behaviour of mouse wheel
+export const ZOOM_DELTA = 1.2

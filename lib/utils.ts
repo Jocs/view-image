@@ -14,4 +14,4 @@ export const easeOutQuart = (t, b, c, d) => {
 export const noop = () => {}
 
 let id = 0
-export const getUniqueId = ():number => id++
+export const getUniqueId = (): number => id++
