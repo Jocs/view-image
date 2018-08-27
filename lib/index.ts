@@ -85,7 +85,7 @@ class ImageViewer {
     this.init()
   }
 
-  private async init() {
+  public async init() {
     const { beforeload, loaded, failed } = this.options
 
     beforeload()
@@ -585,12 +585,7 @@ class ImageViewer {
   }
 
   private calculateDimensions() {
-    const {
-      image,
-      container,
-      snapView,
-      imageNativeWidth
-    } = this
+    const { image, container, snapView, imageNativeWidth } = this
     const imageStyles = getComputedStyle(image)
     const containerStyles = getComputedStyle(container)
     const imageWidth = parseInt(imageStyles['width'], 10)
@@ -656,7 +651,7 @@ class ImageViewer {
     }
   }
 
-  public load(imgUrl) {
+  private load(imgUrl) {
     const { snapImageWrap, imageWrap } = this
     let resolve = null
     let reject = null
@@ -687,6 +682,30 @@ class ImageViewer {
       reject()
     }
     return promise
+  }
+
+  public async update(imageUrl) {
+    const { beforeload, loaded, failed } = this.options
+
+    if (this.snapImage) {
+      this.snapImage.remove()
+    }
+    if (this.image) {
+      this.image.remove()
+    }
+
+    this.snapViewVisibility(false)
+    beforeload()
+    try {
+      const image = await this.load(imageUrl)
+      this.snapViewVisibility(true)
+      loaded(image)
+    } catch (err) {
+      this.container.innerHTML = ''
+      return failed(err)
+    }
+    this.calculateDimensions()
+    this.resetZoom()
   }
 
   public destroy() {
